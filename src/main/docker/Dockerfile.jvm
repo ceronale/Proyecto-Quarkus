@@ -1,4 +1,4 @@
-####
+###
 # This Dockerfile is used in order to build a container that runs the Quarkus application in JVM mode
 #
 # Before building the container image run:
@@ -25,10 +25,10 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:8.4
 
 ARG JAVA_PACKAGE=java-11-openjdk-headless
 ARG RUN_JAVA_VERSION=1.3.8
-ENV LANG='en_US.UTF-8' LANGUAGE='en_US:en'
+ENV LANG='en_US.UTF-8' LANGUAGE='en'
 # Install java and the run-java script
 # Also set up permissions for user `1001`
-RUN microdnf install curl ca-certificates ${JAVA_PACKAGE} \
+RUN microdnf install curl ca-certificates ${JAVA_PACKAGE} maven \
     && microdnf update \
     && microdnf clean all \
     && mkdir /deployments \
@@ -43,13 +43,15 @@ RUN microdnf install curl ca-certificates ${JAVA_PACKAGE} \
 # Configure the JAVA_OPTIONS, you can add -XshowSettings:vm to also display the heap size.
 ENV JAVA_OPTIONS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
 # We make four distinct layers so if there are application changes the library layers can be re-used
-COPY --chown=1001 target/quarkus-app/lib/ /deployments/lib/
-COPY --chown=1001 target/quarkus-app/*.jar /deployments/
-COPY --chown=1001 target/quarkus-app/app/ /deployments/app/
-COPY --chown=1001 target/quarkus-app/quarkus/ /deployments/quarkus/
+WORKDIR /usr/src/app
+COPY pom.xml .
+RUN mvn -B -f pom.xml -s /usr/share/maven/ref/settings-docker.xml dependency:resolve
+COPY src src
+RUN mvn -B -DskipTests package -f /usr/src/app/pom.xml -Dquarkus.package.type=uber-jar
+
+COPY --chown=1001 target/quarkus-app/ /deployments/
 
 EXPOSE 8080
 USER 1001
 
 ENTRYPOINT [ "/deployments/run-java.sh" ]
-
